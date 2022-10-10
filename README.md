@@ -1,15 +1,15 @@
 # Tekton test repo
 
-This repository creates an AKS cluster & [tekton pipelines](https://tekton.dev/) to deploy [this repository](https://github.com/arnaud-tincelin/sampleapp).
+This repository creates an AKS cluster with [tekton pipelines](https://tekton.dev/) to deploy [a sample repository](https://github.com/arnaud-tincelin/sampleapp).
 
 The pipeline can be triggered using a kubectl command or using an HTTP trigger.
 
 ## Required tools
 
-[Kustomize](https://kustomize.io/)
-[Kapp](https://carvel.dev/kapp/)
-[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
-[Terraform](https://www.terraform.io/downloads)
+- [Kustomize](https://kustomize.io/)
+- [Kapp](https://carvel.dev/kapp/)
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
+- [Terraform](https://www.terraform.io/downloads)
 
 ## Deploy the cluster
 
@@ -27,6 +27,8 @@ To access the dashboard, run:
 kubectl --kubeconfig kubeconfig -n tekton-pipelines port-forward svc/tekton-dashboard 9097:9097
 ```
 
+Then, browse [http://localhost:9097/](http://localhost:9097/).
+
 ## Start a pipeline using a kubectl command
 
 ```bash
@@ -34,7 +36,7 @@ REPO_URL="https://github.com/arnaud-tincelin/sampleapp.git"
 NAME="ati01"
 SUBSCRIPTION_ID=""
 
-kubectl create -f <(
+kubectl --kubeconfig kubeconfig create -f <(
 cat <<EOF
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
@@ -74,7 +76,7 @@ EOF
 REPO_URL="https://github.com/arnaud-tincelin/sampleapp.git"
 NAME="ati02"
 SUBSCRIPTION_ID=""
-CLUSTER_ADDRESS="http://$(kubectl -n tekton-pipelines get ing func-app-listener-ingress -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+CLUSTER_ADDRESS="http://$(kubectl --kubeconfig kubeconfig -n tekton-pipelines get ing func-app-listener-ingress -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 
 data=$(
   cat <<EOF
@@ -94,6 +96,6 @@ curl -v \
 
 ## References
 
-[Kubernetes Workload Identity](https://azure.github.io/azure-workload-identity/docs/introduction.html)
-[Terraform AzureRM with OIDC](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_oidc#configuring-the-service-principal-in-terraform)
-[Tekton Quick Start](https://azure.github.io/azure-workload-identity/docs/quick-start.html)
+- [Azure Workload Identity](https://azure.github.io/azure-workload-identity/docs/introduction.html)
+- [Terraform AzureRM with OIDC](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_oidc#configuring-the-service-principal-in-terraform)
+- [Tekton Quick Start](https://azure.github.io/azure-workload-identity/docs/quick-start.html)

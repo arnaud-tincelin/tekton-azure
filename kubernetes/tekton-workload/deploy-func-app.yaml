@@ -1,0 +1,130 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: deploy-func-app
+spec:
+  description: | 
+    This pipeline deploys a new Azure Function App
+  params:
+  - name: repo-url
+    type: string
+    description: The git repo URL to clone from.
+  - name: name
+    type: string
+    description: Unique name for this deployment.
+  - name: subscription_id
+    type: string
+    description: The target Azure Subscription.
+  workspaces:
+  - name: shared-data
+    description: | 
+      This workspace contains the cloned repo files, so they can be read by the
+      next task.
+  tasks:
+  - name: login
+    taskRef:
+      name: az-login
+  - name: fetch-source
+    taskRef:
+      name: git-clone # https://tekton.dev/docs/how-to-guides/clone-repository/
+    workspaces:
+    - name: output
+      workspace: shared-data
+    params:
+    - name: url
+      value: $(params.repo-url)
+  - name: terraform
+    runAfter: ["fetch-source"]
+    taskRef:
+      name: tf-init-apply
+    workspaces:
+    - name: source
+      workspace: shared-data
+    params:
+    - name: name
+      value: $(params.name)
+    - name: subscription_id
+      value: $(params.subscription_id)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: deploy-func-app-template
+spec:
+  params:
+  - name: name
+  - name: repourl
+  - name: subscriptionid
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: deploy-deploy-func-app-
+    spec:
+      serviceAccountName: tekton-workload-identity
+      pipelineRef:
+        name: deploy-func-app
+      podTemplate:
+        securityContext:
+          fsGroup: 65532
+      workspaces:
+      - name: shared-data
+        volumeClaimTemplate:
+          spec:
+            accessModes:
+            - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+      params:
+      - name: repo-url
+        value: $(tt.params.repourl)
+      - name: name
+        value: $(tt.params.name)
+      - name: subscription_id
+        value: $(tt.params.subscriptionid)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: deploy-func-app-binding
+spec: 
+  params:
+  - name: name
+    value: $(body.name)
+  - name: subscriptionid
+    value: $(body.subscription_id)
+  - name: repourl
+    value: $(body.repo_url)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: deploy-func-app-listener
+spec:
+  serviceAccountName: tekton-event-listener-robot
+  triggers:
+    - name: deploy-func-app-trigger 
+      bindings:
+      - ref: deploy-func-app-binding
+      template:
+        ref: deploy-func-app-template
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: deploy-func-app-listener-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: el-deploy-func-app-listener
+            port:
+              number: 8080

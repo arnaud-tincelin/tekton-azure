@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: tf-init-apply
+spec:
+  workspaces:
+  - name: source
+  params:
+  - name: name
+    type: string
+  - name: subscription_id
+    type: string
+  steps:
+  - name: init
+    image: hashicorp/terraform:latest
+    args:
+      - -chdir=$(workspaces.source.path)
+      - init
+  - name: apply
+    image: zenika/terraform-azure-cli:latest
+    script: |
+      #!/bin/bash
+      # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_oidc#configuring-the-service-principal-in-terraform
+      # https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs#use_oidc
+      export ARM_CLIENT_ID=$AZURE_CLIENT_ID
+      export ARM_TENANT_ID=$AZURE_TENANT_ID
+      export ARM_OIDC_TOKEN_FILE_PATH=$AZURE_FEDERATED_TOKEN_FILE
+      export ARM_USE_OIDC=true
+      terraform -chdir=$(workspaces.source.path) apply -auto-approve \
+        --var=location="west europe" \
+        --var=name=$(params.name) \
+        --var=subscription_id=$(params.subscription_id)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: az-login
+spec:
+  steps:
+    - name: az-login
+      image: mcr.microsoft.com/azure-cli
+      script: |
+        #!/bin/bash
+        az login --service-principal -u $AZURE_CLIENT_ID -t $AZURE_TENANT_ID --federated-token $(cat $AZURE_FEDERATED_TOKEN_FILE)
+        az account show

@@ -1,0 +1,25 @@
+# https://azure.github.io/azure-workload-identity/docs/installation/mutating-admission-webhook.html#helm-3-recommended
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- https://github.com/Azure/azure-workload-identity/releases/download/v0.13.0/azure-wi-webhook.yaml
+
+patches:
+- target:
+    kind: ConfigMap
+    name: azure-wi-webhook-config
+    version: v1
+  patch: |-
+    - op: replace
+      path: /data/AZURE_ENVIRONMENT
+      value: AzurePublicCloud
+- target:
+    kind: Deployment
+    name: azure-wi-webhook-controller-manager
+    version: v1
+    group: apps
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/args
+      value: [--arc-cluster=false]
